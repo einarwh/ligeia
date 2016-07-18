@@ -87,8 +87,13 @@ renderProperties properties =
   div [] [ renderStringProperty "title" properties.title
          , renderStringProperty "description" properties.description ] 
 
+renderField field = 
+  div [] [ div [ style [ ("font-weight", "bold") ] ] [ text field.name ]
+         , input [ value field.value ] [ text field.name ] ]
+
 renderAction action = 
-  div [] [ button [] [ text action.name ] 
+  div [] [ div [] (List.map renderField action.fields)
+         , button [] [ text action.name ] 
          , text action.href ]
 
 renderActions actions =
