@@ -2,9 +2,9 @@ import Html exposing (Html, Attribute, text, div, input, button, a, img)
 import Html.App exposing (program)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onInput, onClick)
-import Http
+import Http exposing (send, defaultSettings, empty, Value(..), Response, RawError(..), Error(..))
 import String
-import Task
+import Task exposing (Task, andThen, mapError, succeed, fail)
 
 main =
   program { init = init
@@ -98,17 +98,47 @@ type Msg
   | FetchSucceed String
   | FetchFail Http.Error
 
+promoteError : RawError -> Error
+promoteError rawError =
+  case rawError of
+    RawTimeout -> Timeout
+    RawNetworkError -> NetworkError
+
+handleResponse : (String -> Task Error a) -> Response -> Task Error a
+handleResponse handle response =
+  if 200 <= response.status && response.status < 300 then
+      case response.value of
+        Text str ->
+            handle str
+        _ ->
+            fail (UnexpectedPayload "Response body is a blob, expecting a string.")
+  else
+    fail (BadResponse response.status response.statusText)
+
+
+getStr : String -> Task Error String
+getStr url =
+  let request =
+        { verb = "GET"
+        , headers = [ ("Accept", "application/vnd.siren+json") ]
+        , url = url
+        , body = empty
+        }
+  in
+      mapError promoteError (send defaultSettings request)
+      `andThen` handleResponse succeed
+
 fetchCommand : String -> Cmd Msg
 fetchCommand loc =
-  Task.perform FetchFail FetchSucceed (Http.getString loc)
-
+  Task.perform FetchFail FetchSucceed (getStr loc)
+  
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg oldModel =
   case msg of
   NewLocation loc -> ({ oldModel | location = loc }, Cmd.none)
   GoToLink loc -> ({ oldModel | location = loc }, fetchCommand loc)
-  FetchSucceed s -> ({ oldModel | debug = "lol" }, Cmd.none)
-  FetchFail e -> ({ oldModel | debug = "oh" }, Cmd.none)
+  FetchSucceed s -> ({ oldModel | debug = s }, Cmd.none)
+  FetchFail e -> ({ oldModel | debug = "ohhh" }, Cmd.none)
 
 -- VIEW
 
