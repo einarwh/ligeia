@@ -1,120 +1,179 @@
 import Html exposing (Html, Attribute, text, div, input, button, a, img)
-import Html.App exposing (beginnerProgram)
+import Html.App exposing (program)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onInput, onClick)
+import Http
 import String
-
+import Task
 
 main =
-  beginnerProgram { model = model, view = view, update = update }
+  program { init = init
+          , view = view
+          , update = update
+          , subscriptions = subscriptions }
 
-
-type alias Model = 
+type alias Model =
   { location : String,
     body : SirenDocument }
 
-sirenDoc = 
-  { properties = { title = "mytitle"
-                 , description = "mydesc" } 
-  , actions = [ { name = "start-game" 
-                , method = "POST"
-                , href = "http://localhost:1337/hywit/void"
-                , fields = [ { name = "foo"
-                             , type' = "text" 
-                             , value = "nought" } ] } ]
-  , links = [ { rel = ["lol", "hello"], href = "http://wherever" }
-            , { rel = ["ok", "wut"], href = "http://lolever" }
-            , { rel = ["yes", "image"]
-              , href = "http://localhost:1337/images/grue.png" }
-            , { rel = ["image"]
-              , href = "http://localhost:1337/images/cave.png" }] }
+sirenDoc : SirenDocument
+sirenDoc =
+  { class = Nothing
+  , properties =
+    Just { title = "mytitle"
+         , description = "mydesc" }
+  , actions =
+    Just [ { name = "start-game"
+         , method = "POST"
+         , href = "http://localhost:1337/hywit/void"
+         , fields = [ { name = "foo"
+                      , type' = "text"
+                      , value = "nought" } ] } ]
+  , links =
+    Just [ { rel = ["lol", "hello"], href = "http://wherever" }
+         , { rel = ["ok", "wut"], href = "http://lolever" }
+         , { rel = ["yes", "image"]
+           , href = "http://localhost:1337/images/grue.png" }
+         , { rel = ["image"]
+           , href = "http://localhost:1337/images/cave.png" }] }
 
 model : Model
-model = 
+model =
   { location = "http://hyperwizard.azurewebsites.net/hywit/void",
     body = sirenDoc }
+
+init : (Model, Cmd Msg)
+init = (model, Cmd.none)
+
+-- SUBSCRIPTIONS
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+  Sub.none
 
 -- UPDATE
 
 type alias SirenLinkRel = String
 type alias SirenHref = String
 
-type alias SirenLink = 
+type alias SirenLink =
   { rel: List SirenLinkRel,
     href: SirenHref }
 
-type alias SirenProperties = 
+type alias SirenProperties =
   { title: String,
     description: String }
 
-type alias SirenField = 
+type alias SirenField =
   { name: String,
     type': String,
     value: String }
 
-type alias SirenAction = 
+type alias SirenAction =
   { name: String,
     method: String,
     href: SirenHref,
     fields: List SirenField }
 
-type alias SirenDocument = 
-  { properties: SirenProperties,
-    actions: List SirenAction,
-    links: List SirenLink }
+type alias SirenActions =
+  List SirenAction
 
-type Msg = NewLocation String | GoToLink String
+type alias SirenClass =
+  List String
 
+type alias SirenLinks =
+  List SirenLink
+
+type alias SirenDocument =
+  { class: Maybe SirenClass
+  , properties: Maybe SirenProperties
+  , actions: Maybe SirenActions
+  , links: Maybe SirenLinks }
+
+type Msg
+  = NewLocation String
+  | GoToLink String
+  | FetchSucceed String
+  | FetchFail Http.Error
+
+fetchCommand loc =
+  Task.perform FetchFail FetchSucceed (Http.getString loc)
+
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg oldModel =
   case msg of
-  NewLocation loc -> { oldModel | location = loc }
-  GoToLink loc -> { oldModel | location = loc }
+  NewLocation loc -> ({ oldModel | location = loc }, Cmd.none)
+  GoToLink loc -> ({ oldModel | location = loc }, Cmd.none)
+  FetchSucceed s -> (oldModel, Cmd.none)
+  FetchFail e -> (oldModel, Cmd.none)
 
+-- VIEW
+
+renderImageLink : SirenLink -> Html Msg
 renderImageLink link =
-  img [ src link.href ] [] 
+  img [ src link.href ] []
 
+renderAnchorLink : SirenLink -> Html Msg
 renderAnchorLink link =
   a [ onClick (GoToLink link.href) ] [ text link.href ]
 
+renderLink : SirenLink -> Html Msg
 renderLink link =
   if List.member "image" link.rel then renderImageLink link else renderAnchorLink link
 
-renderStringProperty key value = 
-  div [] [ div [ style [ ("font-weight", "bold") ] ] [ text key ] 
-         , div [] [ text value ] ]  
+renderStringProperty : String -> String -> Html Msg
+renderStringProperty key value =
+  div [] [ div [ style [ ("font-weight", "bold") ] ] [ text key ]
+         , div [] [ text value ] ]
 
-renderProperties properties =
-  div [] [ renderStringProperty "title" properties.title
-         , renderStringProperty "description" properties.description ] 
+renderProperties : Maybe SirenProperties -> Html Msg
+renderProperties maybeProps =
+  case maybeProps of
+  Just properties ->
+    div [] [ renderStringProperty "title" properties.title
+           , renderStringProperty "description" properties.description ]
+  Nothing ->
+    div [] []
 
-renderField field = 
+renderField field =
   div [] [ div [ style [ ("font-weight", "bold") ] ] [ text field.name ]
          , input [ value field.value ] [ text field.name ] ]
 
-renderAction action = 
+renderAction action =
   div [] [ div [] (List.map renderField action.fields)
-         , button [] [ text action.name ] 
+         , button [] [ text action.name ]
          , text action.href ]
 
-renderActions actions =
-  let rendered = List.map renderAction actions
-  in 
-  div [] rendered
+renderActions : Maybe SirenActions -> Html Msg
+renderActions maybeActions =
+  case maybeActions of
+  Just actions ->
+    let rendered = List.map renderAction actions
+    in
+    div [] rendered
+  Nothing ->
+    div [] []
 
+renderDocument : SirenDocument -> Html Msg
 renderDocument doc =
-  let (imageLinks, anchorLinks) = 
-    List.partition (\lnk -> List.member "image" lnk.rel) doc.links
-  in 
+  let (imageLinks, anchorLinks) =
+    case doc.links of
+    Just links ->
+      List.partition (\lnk -> List.member "image" lnk.rel) links
+    Nothing ->
+      ([], [])
+  in
   div []
     [ renderProperties doc.properties
     , renderActions doc.actions
     , div [] (List.map renderAnchorLink anchorLinks)
     , div [] (List.map renderImageLink imageLinks) ]
 
+view : Model -> Html Msg
 view model =
   div []
     [ input [ value model.location, onInput NewLocation, myStyle ] []
-    , button [ onClick (GoToLink "I don't even know") ] [ text "->" ]
+    , button [ onClick (GoToLink "http://localhost:1337/hywit/void") ] [ text "->" ]
     , div [] [ text model.location ]
     , renderDocument model.body ]
 
