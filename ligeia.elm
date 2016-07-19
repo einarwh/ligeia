@@ -13,8 +13,9 @@ main =
           , subscriptions = subscriptions }
 
 type alias Model =
-  { location : String,
-    body : SirenDocument }
+  { location : String
+  , debug : String
+  , body : SirenDocument }
 
 sirenDoc : SirenDocument
 sirenDoc =
@@ -39,8 +40,9 @@ sirenDoc =
 
 model : Model
 model =
-  { location = "http://hyperwizard.azurewebsites.net/hywit/void",
-    body = sirenDoc }
+  { location = "http://hyperwizard.azurewebsites.net/hywit/void"
+  , debug = ""
+  , body = sirenDoc }
 
 init : (Model, Cmd Msg)
 init = (model, Cmd.none)
@@ -96,6 +98,7 @@ type Msg
   | FetchSucceed String
   | FetchFail Http.Error
 
+fetchCommand : String -> Cmd Msg
 fetchCommand loc =
   Task.perform FetchFail FetchSucceed (Http.getString loc)
 
@@ -103,9 +106,9 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg oldModel =
   case msg of
   NewLocation loc -> ({ oldModel | location = loc }, Cmd.none)
-  GoToLink loc -> ({ oldModel | location = loc }, Cmd.none)
-  FetchSucceed s -> (oldModel, Cmd.none)
-  FetchFail e -> (oldModel, Cmd.none)
+  GoToLink loc -> ({ oldModel | location = loc }, fetchCommand loc)
+  FetchSucceed s -> ({ oldModel | debug = "lol" }, Cmd.none)
+  FetchFail e -> ({ oldModel | debug = "oh" }, Cmd.none)
 
 -- VIEW
 
@@ -174,7 +177,8 @@ view model =
   div []
     [ input [ value model.location, onInput NewLocation, myStyle ] []
     , button [ onClick (GoToLink "http://localhost:1337/hywit/void") ] [ text "->" ]
-    , div [] [ text model.location ]
+    , div [] [ text ("loc " ++ model.location) ]
+    , div [] [ text ("dbg " ++ model.debug) ]
     , renderDocument model.body ]
 
 myStyle =
