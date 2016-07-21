@@ -1,3 +1,5 @@
+import Array exposing (Array)
+import Dict exposing (Dict)
 import Html exposing (Html, Attribute, text, div, input, button, a, img)
 import Html.App exposing (program)
 import Html.Attributes exposing (..)
@@ -5,6 +7,7 @@ import Html.Events exposing (onInput, onClick)
 import Http exposing (send, defaultSettings, empty, Value(..), Response, RawError(..), Error(..))
 import String
 import Task exposing (Task, andThen, mapError, succeed, fail)
+import Json.Decode exposing (Decoder, int, string, object3, (:=), customDecoder, decodeValue)
 
 main =
   program { init = init
@@ -92,6 +95,80 @@ type alias SirenDocument =
   , actions: Maybe SirenActions
   , links: Maybe SirenLinks }
 
+type JVal
+  = JString String
+  | JBool Bool
+  | JInt Int
+  | JList (List JVal)
+  | JDict (Dict String JVal)
+
+
+nameVal = JString "Gamgee"
+typeVal = JString "text"
+valVal = JString "nought"
+
+arr = JList [ nameVal, typeVal, valVal]
+
+--dctVal = Dict.insert ("name" nameVal Dict.empty)
+
+-- DECODERS
+
+sirenFieldDecoder : Decoder SirenField
+sirenFieldDecoder =
+    object3 SirenField
+        ("name" := string)
+        ("type" := string)
+        ("value" := string)
+      
+sirenFieldListDecoder : Decoder (List SirenField)
+sirenFieldListDecoder = Json.Decode.list sirenFieldDecoder
+
+lazy : (() -> Decoder a) -> Decoder a
+lazy getDecoder =
+    customDecoder Json.Decode.value <|
+       \rawValue ->
+           decodeValue (getDecoder ()) rawValue
+          
+type Tree
+  = Leaf String
+  | Branch Tree Tree
+
+type JsonVal
+  = JsonStr String
+  | JsonBool Bool
+  | JsonInt Int
+  | JsonFloat Float
+  | JsonList (List JsonVal)
+  | JsonDict (Dict String JsonVal)
+
+decodeStr : String -> Decoder JsonVal
+decodeStr s = Json.Decode.succeed (JsonStr s)
+
+decodeBool : Bool -> Decoder JsonVal
+decodeBool b = Json.Decode.succeed (JsonBool b)
+
+decodeInt : Int -> Decoder JsonVal
+decodeInt n = Json.Decode.succeed (JsonInt n)
+
+decodeFloat : Float -> Decoder JsonVal
+decodeFloat f = Json.Decode.succeed (JsonFloat f)
+
+decodeList : List JsonVal -> Decoder JsonVal
+decodeList lst = Json.Decode.succeed (JsonList lst)
+
+decodeDict : Dict String JsonVal -> Decoder JsonVal
+decodeDict dct = Json.Decode.succeed (JsonDict dct)
+
+valDecoder : Decoder JsonVal
+valDecoder =
+  Json.Decode.oneOf
+    [ Json.Decode.float `Json.Decode.andThen` decodeFloat
+    , Json.Decode.int `Json.Decode.andThen` decodeInt
+    , Json.Decode.bool `Json.Decode.andThen` decodeBool
+    , Json.Decode.string `Json.Decode.andThen` decodeStr
+    , Json.Decode.dict (lazy (\_ -> valDecoder)) `Json.Decode.andThen` decodeDict
+    , Json.Decode.list (lazy (\_ -> valDecoder)) `Json.Decode.andThen` decodeList ]
+
 type Msg
   = NewLocation String
   | GoToLink String
@@ -131,7 +208,7 @@ getStr url =
 fetchCommand : String -> Cmd Msg
 fetchCommand loc =
   Task.perform FetchFail FetchSucceed (getStr loc)
-  
+ 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg oldModel =
   case msg of
