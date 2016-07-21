@@ -138,8 +138,12 @@ type JsonVal
   | JsonBool Bool
   | JsonInt Int
   | JsonFloat Float
+  | JsonNull
   | JsonList (List JsonVal)
   | JsonDict (Dict String JsonVal)
+
+decodeNull : Decoder JsonVal
+decodeNull = Json.Decode.null JsonNull
 
 decodeStr : String -> Decoder JsonVal
 decodeStr s = Json.Decode.succeed (JsonStr s)
@@ -162,7 +166,8 @@ decodeDict dct = Json.Decode.succeed (JsonDict dct)
 valDecoder : Decoder JsonVal
 valDecoder =
   Json.Decode.oneOf
-    [ Json.Decode.float `Json.Decode.andThen` decodeFloat
+    [ Json.Decode.null JsonNull
+    , Json.Decode.float `Json.Decode.andThen` decodeFloat
     , Json.Decode.int `Json.Decode.andThen` decodeInt
     , Json.Decode.bool `Json.Decode.andThen` decodeBool
     , Json.Decode.string `Json.Decode.andThen` decodeStr
