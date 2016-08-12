@@ -27,11 +27,13 @@ sirenDoc =
     Just (JsonDict (Dict.fromList [("title", JsonStr "my-title"), ("description", JsonStr "my-description")]))
   , actions =
     Just [ { name = "start-game"
-         , method = "POST"
-         , href = "http://localhost:1337/hywit/void"
-         , fields = [ { name = "foo"
-                      , type' = "text"
-                      , value = "nought" } ] } ]
+           , class = Nothing
+           , method = "POST"
+           , href = "http://localhost:1337/hywit/void"
+           , title = Nothing
+           , fields = [ { name = "foo"
+                        , type' = "text"
+                        , value = "nought" } ] } ]
   , links =
     Just [ { rel = ["lol", "hello"], href = "http://wherever" }
          , { rel = ["ok", "wut"], href = "http://lolever" }
@@ -67,10 +69,11 @@ type JsonVal
   | JsonDict (Dict String JsonVal)
 
 type alias SirenLinkRel = String
+type alias SirenLinkRels = List SirenLinkRel
 type alias SirenHref = String
 
 type alias SirenLink =
-  { rel: List SirenLinkRel,
+  { rel: SirenLinkRels,
     href: SirenHref }
 
 type alias SirenProperties = JsonVal
@@ -80,46 +83,37 @@ type alias SirenField =
     type': String,
     value: String }
 
+type alias SirenFields = List SirenField
+
 type alias SirenAction =
-  { name: String,
-    method: String,
-    href: SirenHref,
-    fields: List SirenField }
+  { name: String
+  , class: Maybe String
+  , method: String
+  , href: SirenHref
+  , title: Maybe String
+  , fields: SirenFields }
 
-type alias SirenActions =
-  List SirenAction
+type alias SirenActions = List SirenAction
 
-type alias SirenClass =
-  List String
+type alias SirenClass = String
 
-type alias SirenLinks =
-  List SirenLink
+type alias SirenClasses = List SirenClass
+
+type alias SirenLinks = List SirenLink
 
 type alias SirenDocument =
-  { class: Maybe SirenClass
+  { class: Maybe SirenClasses
   , properties: Maybe SirenProperties
   , actions: Maybe SirenActions
   , links: Maybe SirenLinks }
 
 -- DECODERS
 
-sirenFieldDecoder : Decoder SirenField
-sirenFieldDecoder =
-    object3 SirenField
-        ("name" := string)
-        ("type" := string)
-        ("value" := string)
-
-sirenFieldListDecoder : Decoder (List SirenField)
-sirenFieldListDecoder = Json.Decode.list sirenFieldDecoder
-
 lazy : (() -> Decoder a) -> Decoder a
 lazy getDecoder =
     customDecoder Json.Decode.value <|
        \rawValue ->
            decodeValue (getDecoder ()) rawValue
-
-
 
 decodeNull : Decoder JsonVal
 decodeNull = Json.Decode.null JsonNull
@@ -189,19 +183,19 @@ toListOfClasses : List (Result JsonParseError String) -> Result JsonParseError (
 toListOfClasses resultList =
   List.foldl combineClassResult (Ok []) resultList
 
-parseClass : JsonVal -> Result JsonParseError SirenClass
-parseClass json =
+parseClasses : JsonVal -> Result JsonParseError SirenClasses
+parseClasses json =
   case json of
     JsonList lst ->
       let
         resultList : List (Result JsonParseError String)
         resultList = List.map parseClassElement lst
         -- List (Result JsonParseError String) -> Result JsonParseError (List String)
-        classes : Result JsonParseError SirenClass
+        classes : Result JsonParseError SirenClasses
         classes = toListOfClasses resultList
       in
         classes
-    _ -> Err ("parseClass: Unexpected json instead of list of strings.", json)
+    _ -> Err ("parseClasses: Unexpected json instead of list of strings.", json)
 
 combineLinkResult : (Result JsonParseError SirenLink) -> Result JsonParseError SirenLinks -> Result JsonParseError SirenLinks
 combineLinkResult res acc =
@@ -216,16 +210,69 @@ toListOfLinks : List (Result JsonParseError SirenLink) -> Result JsonParseError 
 toListOfLinks resultList =
   List.foldl combineLinkResult (Ok []) resultList
 
+parseLinkRelation : JsonVal -> Result JsonParseError SirenLinkRel
+parseLinkRelation json =
+  case json of
+    JsonStr str -> Ok str
+    _ -> Err ("parseLinkRelation: Unexpected json instead of string.", json)
+
+combineLinkRelationResult : (Result JsonParseError SirenLinkRel) -> Result JsonParseError SirenLinkRels -> Result JsonParseError SirenLinkRels
+combineLinkRelationResult res acc =
+  case acc of
+    Ok lst ->
+      case res of
+        Ok s -> Ok (List.append lst [s])
+        Err e -> Err e
+    Err _ -> acc
+
+combineResults : (Result JsonParseError a) -> Result JsonParseError (List a) -> Result JsonParseError (List a)
+combineResults res acc =
+  case acc of
+    Ok lst ->
+      case res of
+        Ok s -> Ok (List.append lst [s])
+        Err e -> Err e
+    Err _ -> acc
+
+toListOfLinkRelations : List (Result JsonParseError SirenLinkRel) -> Result JsonParseError SirenLinkRels
+toListOfLinkRelations resultList =
+  List.foldl combineLinkRelationResult (Ok []) resultList
+
+parseLinkRelations : JsonVal -> Result JsonParseError SirenLinkRels
+parseLinkRelations json =
+  case json of
+    JsonList lst ->
+      let
+        resultList : List (Result JsonParseError SirenLinkRel)
+        resultList = List.map parseLinkRelation lst
+        relations : Result JsonParseError SirenLinkRels
+        relations = toListOfLinkRelations resultList
+      in
+        relations
+    _ -> Err ("parseLinkRelations: Unexpected json instead of list of strings.", json)
+
+parseHref : JsonVal -> Result JsonParseError SirenHref
+parseHref json =
+  case json of
+    JsonStr s -> Ok s
+    _ -> Err ("parseHref: Unexpected json instead of href.", json)
+
 parseLink : JsonVal -> Result JsonParseError SirenLink
 parseLink json =
   case json of
     JsonDict dct ->
-      let (maybeRel, maybeHref) = (Dict.get "rel" dct, Dict.get "href" dct)
+      let (maybeRels, maybeHref) = (Dict.get "rel" dct, Dict.get "href" dct)
       in
-        case (maybeRel, maybeHref) of
-          (Just rel, Just href) ->
-            Ok { rel = [ "relrelrel" ]
-               , href = "http://void" }
+        case (maybeRels, maybeHref) of
+          (Just rels, Just href) ->
+            let
+              linkRelsResult = parseLinkRelations rels
+              linkHrefResult = parseHref href
+            in
+              case (linkRelsResult, linkHrefResult) of
+                (Ok rs, Ok hf) -> Ok { rel = rs, href = hf }
+                (Err e1, _) -> Err e1
+                (_, Err e2) -> Err e2
           _ ->
             Err ("parseLink: Missing parts of link.", json)
     _ ->
@@ -244,12 +291,82 @@ parseLinks json =
         links
     _ -> Err ("parseLinks: Unexpected json instead of list of links.", json)
 
+toListOfActions : List (Result JsonParseError SirenAction) -> Result JsonParseError SirenActions
+toListOfActions resultList =
+  List.foldl combineResults (Ok []) resultList
+
+--type alias SirenAction =-
+--  { name: String
+--  , class: Maybe String
+--  , method: String
+--  , href: SirenHref
+--  , fields: List SirenField }
+
+parseString : JsonVal -> Result JsonParseError String
+parseString json =
+  case json of
+    JsonStr s -> Ok s
+    _ -> Err ("parseString: Unexpected json instead of string.", json)
+
+parseFields : JsonVal -> Result JsonParseError SirenFields
+parseFields json =
+  case json of
+    JsonList lst ->
+      Err ("Not implemented", json)
+    _ -> Err ("parseFields: Unexpected json instead of list of Siren fields", json)
+
+parseAction : JsonVal -> Result JsonParseError SirenAction
+parseAction json =
+  case json of
+    JsonDict dct ->
+      let
+        maybeNameJson = Dict.get "name" dct
+        maybeClassJson = Dict.get "class" dct
+        maybeMethodJson = Dict.get "method" dct
+        maybeHrefJson = Dict.get "href" dct
+        maybeTitleJson = Dict.get "title" dct
+        maybeTypeJson = Dict.get "type" dct
+        maybeFieldsJson = Dict.get "fields" dct
+        maybeNameResult = Maybe.map parseString maybeNameJson -- Maybe (Result JPE String)
+        maybeClassResult = Maybe.map parseClasses maybeClassJson -- Maybe (Result JPE SirenClasses)
+        maybeMethodResult = Maybe.map parseString maybeMethodJson -- Maybe (Result JPE String)
+        maybeHrefResult = Maybe.map parseHref maybeHrefJson -- Maybe (Result JPE SirenHref)
+        maybeTitleResult = Maybe.map parseString maybeTitleJson -- Maybe (Result JPE String)
+        maybeFieldsResult = Maybe.map parseFields maybeFieldsJson -- Maybe (Result JPE SirenFields)
+      in
+        Err ("parseAction: Not implemented.", json)
+    _ ->
+      Err ("parseAction: Unexpected json instead of action.", json)
+
+parseActions : JsonVal -> Result JsonParseError SirenActions
+parseActions json =
+  case json of
+    JsonList lst ->
+      let
+        resultList : List (Result JsonParseError SirenAction)
+        resultList = List.map parseAction lst
+        links : Result JsonParseError SirenActions
+        links = toListOfActions resultList
+      in
+        links
+    _ -> Err ("parseLinks: Unexpected json instead of list of links.", json)
+
 liftError : Maybe (Result JsonParseError a) -> Result JsonParseError (Maybe a)
 liftError maybeResult =
   case maybeResult of
     Just (Ok v) -> Ok (Just v)
     Just (Err e) -> Err e
     Nothing -> Ok Nothing
+
+combineSirenResults : Result JsonParseError (Maybe SirenClasses) -> Result JsonParseError (Maybe SirenLinks) -> Result JsonParseError (Maybe SirenClasses, Maybe SirenLinks)
+combineSirenResults classResult linksResult =
+  case classResult of
+    Err classError -> Err classError
+    Ok maybeClass ->
+      case linksResult of
+        Err linksError -> Err linksError
+        Ok maybeLinks ->
+          Ok (maybeClass, maybeLinks)
 
 toSiren : JsonVal -> SirenParseResult
 toSiren json =
@@ -260,28 +377,24 @@ toSiren json =
         maybePropertiesJson = Dict.get "properties" jd
         maybeActionsJson = Dict.get "actions" jd
         maybeLinksJson = Dict.get "links" jd
-        maybeClassResult = Maybe.map parseClass maybeClassJson -- Just (Result String SirenClass) | Nothing
-        maybeLinksResult = Maybe.map parseLinks maybeLinksJson -- Just (Result String SirenLinks) | Nothing
-        classResult = liftError maybeClassResult
-        linksResult = liftError maybeLinksResult
-        -- (Just (Result String SirenClass), Just (Result String SirenLinks))
-        -- (Result String (Maybe SirenClass, Maybe SirenLinks))
+        maybeClassResult = Maybe.map parseClasses maybeClassJson -- Just (Result JPE SirenClasses) | Nothing
+        maybeActionsResult = Maybe.map parseActions maybeActionsJson -- Just (Result JPE SirenActions) | Nothing
+        maybeLinksResult = Maybe.map parseLinks maybeLinksJson -- Just (Result JPE SirenLinks) | Nothing
+        classResult = liftError maybeClassResult -- Result JPE (Maybe SirenClasses)
+        actionsResult = liftError maybeActionsResult -- Result JPE (Maybe SirenActions)
+        linksResult = liftError maybeLinksResult -- Result JPE (Maybe SirenLinks)
+        combinedResults : Result JsonParseError (Maybe SirenClasses, Maybe SirenLinks)
+        combinedResults = combineSirenResults classResult linksResult
+        -- (Just (Result String SirenClasses), Just (Result String SirenLinks))
+        -- (Result String (Maybe SirenClasses, Maybe SirenLinks))
       in
-        case maybeClassResult of
-          Just classResult ->
-            case classResult of
-              Ok sirenClass ->
-                ValidSiren { class = Just sirenClass
-                           , properties = maybePropertiesJson
-                           , actions = Nothing
-                           , links = Nothing }
-              Err sirenClassErr ->
-                InvalidSiren json
-          Nothing ->
-            ValidSiren { class = Nothing
-                       , properties = Nothing
+        case combinedResults of
+          Err e -> InvalidSiren json
+          Ok (maybeClass, maybeLinks) ->
+            ValidSiren { class = maybeClass
+                       , properties = maybePropertiesJson
                        , actions = Nothing
-                       , links = Nothing }
+                       , links = maybeLinks }
     _ -> InvalidSiren json
 
 --        ValidSiren { class = Maybe.map parseClass maybeClass
@@ -357,7 +470,7 @@ renderImageLink link =
 
 renderAnchorLink : SirenLink -> Html Msg
 renderAnchorLink link =
-  a [ onClick (GoToLink link.href) ] [ text link.href ]
+  a [ onClick (GoToLink link.href) ] ((text link.href) :: List.map text link.rel)
 
 renderLink : SirenLink -> Html Msg
 renderLink link =
@@ -412,7 +525,7 @@ renderActions maybeActions =
   Nothing ->
     div [] []
 
-renderClasses : Maybe SirenClass -> Html Msg
+renderClasses : Maybe SirenClasses -> Html Msg
 renderClasses maybeClasses =
   case maybeClasses of
   Just classes ->
@@ -422,12 +535,18 @@ renderClasses maybeClasses =
   Nothing ->
     div [] []
 
+renderAnchorLinkItem anchorLink =
+  Html.li [] [ (renderAnchorLink anchorLink) ]
+
+renderAnchorLinks anchorLinks =
+  Html.ul [] (List.map renderAnchorLinkItem anchorLinks)
+
 renderSirenDocument : SirenDocument -> Html Msg
 renderSirenDocument doc =
   let (imageLinks, anchorLinks) =
     case doc.links of
     Just links ->
-      List.partition (\lnk -> List.member "image" lnk.rel) links
+      List.partition (\lnk -> List.member "image" lnk.rel || List.member "view" lnk.rel) links
     Nothing ->
       ([], [])
   in
@@ -435,7 +554,7 @@ renderSirenDocument doc =
     [ renderClasses doc.class
     , renderProperties doc.properties
     , renderActions doc.actions
-    , div [] (List.map renderAnchorLink anchorLinks)
+    , div [] (Html.h3 [] [ text "links" ] :: [ (renderAnchorLinks anchorLinks) ])
     , div [] (List.map renderImageLink imageLinks) ]
 
 renderDocument : ResponseDocument -> Html Msg
