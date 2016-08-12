@@ -18,14 +18,13 @@ main =
 type alias Model =
   { location : String
   , debug : String
-  , body : SirenDocument }
+  , body : ResponseDocument }
 
 sirenDoc : SirenDocument
 sirenDoc =
   { class = Nothing
   , properties =
-    Just { title = "mytitle"
-         , description = "mydesc" }
+    Just (JsonDict (Dict.fromList [("title", JsonStr "my-title"), ("description", JsonStr "my-description")]))
   , actions =
     Just [ { name = "start-game"
          , method = "POST"
@@ -45,7 +44,7 @@ model : Model
 model =
   { location = "http://hyperwizard.azurewebsites.net/hywit/void"
   , debug = ""
-  , body = sirenDoc }
+  , body = SirenDoc sirenDoc }
 
 init : (Model, Cmd Msg)
 init = (model, Cmd.none)
@@ -58,6 +57,15 @@ subscriptions model =
 
 -- UPDATE
 
+type JsonVal
+  = JsonStr String
+  | JsonBool Bool
+  | JsonInt Int
+  | JsonFloat Float
+  | JsonNull
+  | JsonList (List JsonVal)
+  | JsonDict (Dict String JsonVal)
+
 type alias SirenLinkRel = String
 type alias SirenHref = String
 
@@ -65,9 +73,7 @@ type alias SirenLink =
   { rel: List SirenLinkRel,
     href: SirenHref }
 
-type alias SirenProperties =
-  { title: String,
-    description: String }
+type alias SirenProperties = JsonVal
 
 type alias SirenField =
   { name: String,
@@ -95,22 +101,6 @@ type alias SirenDocument =
   , actions: Maybe SirenActions
   , links: Maybe SirenLinks }
 
-type JVal
-  = JString String
-  | JBool Bool
-  | JInt Int
-  | JList (List JVal)
-  | JDict (Dict String JVal)
-
-
-nameVal = JString "Gamgee"
-typeVal = JString "text"
-valVal = JString "nought"
-
-arr = JList [ nameVal, typeVal, valVal]
-
---dctVal = Dict.insert ("name" nameVal Dict.empty)
-
 -- DECODERS
 
 sirenFieldDecoder : Decoder SirenField
@@ -119,7 +109,7 @@ sirenFieldDecoder =
         ("name" := string)
         ("type" := string)
         ("value" := string)
-      
+
 sirenFieldListDecoder : Decoder (List SirenField)
 sirenFieldListDecoder = Json.Decode.list sirenFieldDecoder
 
@@ -128,19 +118,8 @@ lazy getDecoder =
     customDecoder Json.Decode.value <|
        \rawValue ->
            decodeValue (getDecoder ()) rawValue
-          
-type Tree
-  = Leaf String
-  | Branch Tree Tree
 
-type JsonVal
-  = JsonStr String
-  | JsonBool Bool
-  | JsonInt Int
-  | JsonFloat Float
-  | JsonNull
-  | JsonList (List JsonVal)
-  | JsonDict (Dict String JsonVal)
+
 
 decodeNull : Decoder JsonVal
 decodeNull = Json.Decode.null JsonNull
@@ -177,8 +156,85 @@ valDecoder =
 type Msg
   = NewLocation String
   | GoToLink String
-  | FetchSucceed String
+  | FetchSucceed ResponseDocument
   | FetchFail Http.Error
+
+type ResponseDocument
+  = TextDoc String
+  | JsonDoc JsonVal
+  | SirenDoc SirenDocument
+
+type SirenParseResult
+  = InvalidSiren JsonVal
+  | ValidSiren SirenDocument
+
+type alias JsonParseError = (String, JsonVal)
+
+parseClassElement : JsonVal -> Result JsonParseError String
+parseClassElement json =
+  case json of
+    JsonStr str -> Ok str
+    _ -> Err ("parseClassElement: Unexpected json instead of string.", json)
+
+combineClassResult : (Result JsonParseError String) -> Result JsonParseError (List String) -> Result JsonParseError (List String)
+combineClassResult res acc =
+  case acc of
+    Ok lst ->
+      case res of
+        Ok s -> Ok (List.append lst [s])
+        Err e -> Err e
+    Err _ -> acc
+
+toListOfClasses : List (Result JsonParseError String) -> Result JsonParseError (List String)
+toListOfClasses resultList =
+  List.foldl combineClassResult (Ok []) resultList
+
+parseClass : JsonVal -> Result JsonParseError SirenClass
+parseClass json =
+  case json of
+    JsonList lst ->
+      let
+        resultList : List (Result JsonParseError String)
+        resultList = List.map parseClassElement lst
+        -- List (Result JsonParseError String) -> Result JsonParseError (List String)
+        classes : Result JsonParseError (List String)
+        classes = toListOfClasses resultList
+      in
+        classes
+    _ -> Err ("parseClass: Unexpected json instead of list of strings.", json)
+
+toSiren : JsonVal -> SirenParseResult
+toSiren json =
+  case json of
+    JsonDict jd ->
+      let
+        maybeClassJson = Dict.get "class" jd -- Just JsonVal | Nothing
+        maybePropertiesJson = Dict.get "properties" jd
+        maybeActionsJson = Dict.get "actions" jd
+        maybeLinksJson = Dict.get "links" jd
+        maybeClassResult = Maybe.map parseClass maybeClassJson -- Just (Result String SirenClass) | Nothing
+      in
+        case maybeClassResult of
+          Just classResult ->
+            case classResult of
+              Ok sirenClass ->
+                ValidSiren { class = Just sirenClass
+                           , properties = maybePropertiesJson
+                           , actions = Nothing
+                           , links = Nothing }
+              Err sirenClassErr ->
+                InvalidSiren json
+          Nothing ->
+            ValidSiren { class = Nothing
+                       , properties = Nothing
+                       , actions = Nothing
+                       , links = Nothing }
+    _ -> InvalidSiren json
+
+--        ValidSiren { class = Maybe.map parseClass maybeClass
+--                   , properties = Maybe.map parseProperties maybeProperties
+--                   , actions = Maybe.map parseActions maybeActions
+--                   , links = Maybe.map parseLinks maybeLinks }
 
 promoteError : RawError -> Error
 promoteError rawError =
@@ -186,7 +242,21 @@ promoteError rawError =
     RawTimeout -> Timeout
     RawNetworkError -> NetworkError
 
-handleResponse : (String -> Task Error a) -> Response -> Task Error a
+handleRes : (ResponseDocument -> Task Error ResponseDocument) -> Response -> Task Error ResponseDocument
+handleRes handle response =
+  if 200 <= response.status && response.status < 300 then
+      case response.value of
+        Text str ->
+            let x = Json.Decode.decodeString valDecoder str in
+            case x of
+              Ok jdoc -> handle (JsonDoc jdoc)
+              Err err -> handle (TextDoc str)
+        _ ->
+            fail (UnexpectedPayload "Response body is a blob, expecting a string.")
+  else
+    fail (BadResponse response.status response.statusText)
+
+handleResponse : (String -> Task Error String) -> Response -> Task Error String
 handleResponse handle response =
   if 200 <= response.status && response.status < 300 then
       case response.value of
@@ -197,9 +267,8 @@ handleResponse handle response =
   else
     fail (BadResponse response.status response.statusText)
 
-
-getStr : String -> Task Error String
-getStr url =
+getDocument : String -> Task Error ResponseDocument
+getDocument url =
   let request =
         { verb = "GET"
         , headers = [ ("Accept", "application/vnd.siren+json") ]
@@ -208,19 +277,19 @@ getStr url =
         }
   in
       mapError promoteError (send defaultSettings request)
-      `andThen` handleResponse succeed
+      `andThen` handleRes succeed
 
 fetchCommand : String -> Cmd Msg
 fetchCommand loc =
-  Task.perform FetchFail FetchSucceed (getStr loc)
- 
+  Task.perform FetchFail FetchSucceed (getDocument loc)
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg oldModel =
   case msg of
   NewLocation loc -> ({ oldModel | location = loc }, Cmd.none)
   GoToLink loc -> ({ oldModel | location = loc }, fetchCommand loc)
-  FetchSucceed s -> ({ oldModel | debug = s }, Cmd.none)
-  FetchFail e -> ({ oldModel | debug = "ohhh" }, Cmd.none)
+  FetchSucceed doc -> ({ oldModel | debug = "success", body = doc }, Cmd.none)
+  FetchFail e -> ({ oldModel | debug = "failure" }, Cmd.none)
 
 -- VIEW
 
@@ -241,12 +310,28 @@ renderStringProperty key value =
   div [] [ div [ style [ ("font-weight", "bold") ] ] [ text key ]
          , div [] [ text value ] ]
 
+renderJson : JsonVal -> Html Msg
+renderJson json =
+  case json of
+    JsonStr s -> text s
+    JsonBool b -> text (if b then "true" else "false")
+    JsonInt n -> text "int"
+    JsonFloat f -> text "float"
+    JsonNull -> text "null"
+    JsonList lst -> div [] (List.map renderJson lst)
+    JsonDict dct ->
+      let
+        dctLst : List (String, JsonVal)
+        dctLst = Dict.toList dct
+      in
+        div [] (List.map (\(key, value) -> div [] [ div [ style [ ("font-weight", "bold") ] ] [ text key ]
+                                                  , renderJson value ]) dctLst)
+
 renderProperties : Maybe SirenProperties -> Html Msg
 renderProperties maybeProps =
   case maybeProps of
   Just properties ->
-    div [] [ renderStringProperty "title" properties.title
-           , renderStringProperty "description" properties.description ]
+    renderJson properties
   Nothing ->
     div [] []
 
@@ -269,8 +354,9 @@ renderActions maybeActions =
   Nothing ->
     div [] []
 
-renderDocument : SirenDocument -> Html Msg
-renderDocument doc =
+
+renderSirenDocument : SirenDocument -> Html Msg
+renderSirenDocument doc =
   let (imageLinks, anchorLinks) =
     case doc.links of
     Just links ->
@@ -283,6 +369,13 @@ renderDocument doc =
     , renderActions doc.actions
     , div [] (List.map renderAnchorLink anchorLinks)
     , div [] (List.map renderImageLink imageLinks) ]
+
+renderDocument : ResponseDocument -> Html Msg
+renderDocument doc =
+  case doc of
+    SirenDoc sirenDoc -> renderSirenDocument sirenDoc
+    JsonDoc jsonDoc -> renderJson jsonDoc
+    TextDoc textDoc -> div [] [ text textDoc ]
 
 view : Model -> Html Msg
 view model =
