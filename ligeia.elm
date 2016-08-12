@@ -197,11 +197,59 @@ parseClass json =
         resultList : List (Result JsonParseError String)
         resultList = List.map parseClassElement lst
         -- List (Result JsonParseError String) -> Result JsonParseError (List String)
-        classes : Result JsonParseError (List String)
+        classes : Result JsonParseError SirenClass
         classes = toListOfClasses resultList
       in
         classes
     _ -> Err ("parseClass: Unexpected json instead of list of strings.", json)
+
+combineLinkResult : (Result JsonParseError SirenLink) -> Result JsonParseError SirenLinks -> Result JsonParseError SirenLinks
+combineLinkResult res acc =
+  case acc of
+    Ok lst ->
+      case res of
+        Ok s -> Ok (List.append lst [s])
+        Err e -> Err e
+    Err _ -> acc
+
+toListOfLinks : List (Result JsonParseError SirenLink) -> Result JsonParseError SirenLinks
+toListOfLinks resultList =
+  List.foldl combineLinkResult (Ok []) resultList
+
+parseLink : JsonVal -> Result JsonParseError SirenLink
+parseLink json =
+  case json of
+    JsonDict dct ->
+      let (maybeRel, maybeHref) = (Dict.get "rel" dct, Dict.get "href" dct)
+      in
+        case (maybeRel, maybeHref) of
+          (Just rel, Just href) ->
+            Ok { rel = [ "relrelrel" ]
+               , href = "http://void" }
+          _ ->
+            Err ("parseLink: Missing parts of link.", json)
+    _ ->
+      Err ("parseLink: Unexpected json instead of link.", json)
+
+parseLinks : JsonVal -> Result JsonParseError SirenLinks
+parseLinks json =
+  case json of
+    JsonList lst ->
+      let
+        resultList : List (Result JsonParseError SirenLink)
+        resultList = List.map parseLink lst
+        links : Result JsonParseError SirenLinks
+        links = toListOfLinks resultList
+      in
+        links
+    _ -> Err ("parseLinks: Unexpected json instead of list of links.", json)
+
+liftError : Maybe (Result JsonParseError a) -> Result JsonParseError (Maybe a)
+liftError maybeResult =
+  case maybeResult of
+    Just (Ok v) -> Ok (Just v)
+    Just (Err e) -> Err e
+    Nothing -> Ok Nothing
 
 toSiren : JsonVal -> SirenParseResult
 toSiren json =
@@ -213,6 +261,11 @@ toSiren json =
         maybeActionsJson = Dict.get "actions" jd
         maybeLinksJson = Dict.get "links" jd
         maybeClassResult = Maybe.map parseClass maybeClassJson -- Just (Result String SirenClass) | Nothing
+        maybeLinksResult = Maybe.map parseLinks maybeLinksJson -- Just (Result String SirenLinks) | Nothing
+        classResult = liftError maybeClassResult
+        linksResult = liftError maybeLinksResult
+        -- (Just (Result String SirenClass), Just (Result String SirenLinks))
+        -- (Result String (Maybe SirenClass, Maybe SirenLinks))
       in
         case maybeClassResult of
           Just classResult ->
@@ -249,7 +302,12 @@ handleRes handle response =
         Text str ->
             let x = Json.Decode.decodeString valDecoder str in
             case x of
-              Ok jdoc -> handle (JsonDoc jdoc)
+              Ok jdoc ->
+                let doc = case toSiren jdoc of
+                            ValidSiren sdoc -> SirenDoc sdoc
+                            InvalidSiren _ -> JsonDoc jdoc
+                in
+                  handle doc
               Err err -> handle (TextDoc str)
         _ ->
             fail (UnexpectedPayload "Response body is a blob, expecting a string.")
@@ -331,7 +389,7 @@ renderProperties : Maybe SirenProperties -> Html Msg
 renderProperties maybeProps =
   case maybeProps of
   Just properties ->
-    renderJson properties
+    div [] [ (Html.h3 [] [ text "properties" ]), renderJson properties ]
   Nothing ->
     div [] []
 
@@ -354,6 +412,15 @@ renderActions maybeActions =
   Nothing ->
     div [] []
 
+renderClasses : Maybe SirenClass -> Html Msg
+renderClasses maybeClasses =
+  case maybeClasses of
+  Just classes ->
+    let rendered = List.map text classes
+    in
+    div [] (Html.h3 [] [ (text "class") ] :: rendered)
+  Nothing ->
+    div [] []
 
 renderSirenDocument : SirenDocument -> Html Msg
 renderSirenDocument doc =
@@ -365,7 +432,8 @@ renderSirenDocument doc =
       ([], [])
   in
   div []
-    [ renderProperties doc.properties
+    [ renderClasses doc.class
+    , renderProperties doc.properties
     , renderActions doc.actions
     , div [] (List.map renderAnchorLink anchorLinks)
     , div [] (List.map renderImageLink imageLinks) ]
@@ -374,7 +442,7 @@ renderDocument : ResponseDocument -> Html Msg
 renderDocument doc =
   case doc of
     SirenDoc sirenDoc -> renderSirenDocument sirenDoc
-    JsonDoc jsonDoc -> renderJson jsonDoc
+    JsonDoc jsonDoc -> div [] [ text "json document", renderJson jsonDoc ]
     TextDoc textDoc -> div [] [ text textDoc ]
 
 view : Model -> Html Msg
