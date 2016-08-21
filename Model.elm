@@ -12,8 +12,10 @@ type alias Model =
 type Msg
   = NewLocation String
   | GoToLink String
-  | FetchSucceed ResponseDocument
+  | FetchSucceed FetchResponse
   | FetchFail Http.Error
+
+type alias FetchResponse = (String, ResponseDocument)
 
 type ResponseDocument
   = TextDoc String

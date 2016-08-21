@@ -51,9 +51,22 @@ renderProperties maybeProps =
   Nothing ->
     div [] []
 
+renderField : SirenField -> Html Msg
 renderField field =
-  div [] [ div [ style [ ("font-weight", "bold") ] ] [ text field.name ]
-         , input [ value field.value ] [ text field.name ] ]
+  let
+    name = field.name
+    type' =
+      case field.type' of
+        Just tp -> tp
+        Nothing -> "text"
+    title =
+      case field.title of
+        Just t -> t
+        Nothing -> ""
+    maybeValue = field.value
+  in
+    div [] [ div [ style [ ("font-weight", "bold") ] ] [ text name ] ]
+--           , input [ value field.value ] [ text field.name ] ]
 
 renderAction : SirenAction -> Html Msg
 renderAction action =
@@ -74,7 +87,7 @@ renderActions maybeActions =
     in
     div [] rendered
   Nothing ->
-    div [] []
+    div [] [ text "No actions" ]
 
 renderClasses : Maybe SirenClasses -> Html Msg
 renderClasses maybeClasses =

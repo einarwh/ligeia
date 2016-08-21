@@ -7,7 +7,7 @@ import Siren exposing (..)
 type alias JsonParseError = (String, JsonVal)
 
 type SirenParseResult
-  = InvalidSiren JsonVal
+  = InvalidSiren JsonParseError
   | ValidSiren SirenDocument
 
 parseClassElement : JsonVal -> Result JsonParseError String
@@ -147,11 +147,48 @@ parseString json =
     JsonStr s -> Ok s
     _ -> Err ("parseString: Unexpected json instead of string.", json)
 
+parseField : JsonVal -> Result JsonParseError SirenField
+parseField json =
+  case json of
+    JsonDict dct ->
+      let
+        nameResult = parseDictValue dct "name" parseString
+        typeResult = parseDictValue dct "type" parseString
+        valueResult = parseDictValue dct "value" parseString
+        titleResult = parseDictValue dct "title" parseString
+      in
+        case (nameResult, typeResult, valueResult, titleResult) of
+          (Ok maybeName, Ok maybeType, Ok maybeValue, Ok maybeTitle) ->
+            case (maybeName, maybeType, maybeValue, maybeTitle) of
+              (Just nameValue, _, _, _) ->
+                Ok { name = nameValue
+                   , type' = maybeType
+                   , value = maybeValue
+                   , title = maybeTitle }
+              _ ->
+                Err ("Missing mandatory part of field.", json)
+          (Err e1, _, _, _) -> Err e1
+          (_, Err e2, _, _) -> Err e2
+          (_, _, Err e3, _) -> Err e3
+          (_, _, _, Err e4) -> Err e4
+    _ ->
+      Err ("parseField: Unexpected json instead of field.", json)
+
+toListOfFields : List (Result JsonParseError SirenField) -> Result JsonParseError SirenFields
+toListOfFields resultList =
+  List.foldl combineResults (Ok []) resultList
+
 parseFields : JsonVal -> Result JsonParseError SirenFields
 parseFields json =
   case json of
     JsonList lst ->
-      Err ("Not implemented", json)
+      let
+        resultList : List (Result JsonParseError SirenField)
+        resultList = List.map parseField lst
+        fields : Result JsonParseError SirenFields
+        fields = toListOfFields resultList
+      in
+        fields
     _ -> Err ("parseFields: Unexpected json instead of list of Siren fields", json)
 
 parseDictValue : Dict String JsonVal -> String -> (JsonVal -> Result JsonParseError a) -> Result JsonParseError (Maybe a)
@@ -211,15 +248,17 @@ liftError maybeResult =
     Just (Err e) -> Err e
     Nothing -> Ok Nothing
 
-combineSirenResults : Result JsonParseError (Maybe SirenClasses) -> Result JsonParseError (Maybe SirenLinks) -> Result JsonParseError (Maybe SirenClasses, Maybe SirenLinks)
-combineSirenResults classResult linksResult =
+combineSirenResults : Result JsonParseError (Maybe SirenClasses) -> Result JsonParseError (Maybe SirenLinks) -> Result JsonParseError (Maybe SirenActions) -> Result JsonParseError (Maybe SirenClasses, Maybe SirenLinks, Maybe SirenActions)
+combineSirenResults classResult linksResult actionsResult =
   case classResult of
     Err classError -> Err classError
     Ok maybeClass ->
       case linksResult of
         Err linksError -> Err linksError
         Ok maybeLinks ->
-          Ok (maybeClass, maybeLinks)
+          case actionsResult of
+            Err actionsError -> Err actionsError
+            Ok maybeActions -> Ok (maybeClass, maybeLinks, maybeActions)
 
 toSiren : JsonVal -> SirenParseResult
 toSiren json =
@@ -236,19 +275,19 @@ toSiren json =
         classResult = liftError maybeClassResult -- Result JPE (Maybe SirenClasses)
         actionsResult = liftError maybeActionsResult -- Result JPE (Maybe SirenActions)
         linksResult = liftError maybeLinksResult -- Result JPE (Maybe SirenLinks)
-        combinedResults : Result JsonParseError (Maybe SirenClasses, Maybe SirenLinks)
-        combinedResults = combineSirenResults classResult linksResult
+        combinedResults : Result JsonParseError (Maybe SirenClasses, Maybe SirenLinks, Maybe SirenActions)
+        combinedResults = combineSirenResults classResult linksResult actionsResult
         -- (Just (Result String SirenClasses), Just (Result String SirenLinks))
         -- (Result String (Maybe SirenClasses, Maybe SirenLinks))
       in
         case combinedResults of
-          Err e -> InvalidSiren json
-          Ok (maybeClass, maybeLinks) ->
+          Err e -> InvalidSiren e
+          Ok (maybeClass, maybeLinks, maybeActions) ->
             ValidSiren { class = maybeClass
                        , properties = maybePropertiesJson
-                       , actions = Nothing
+                       , actions = maybeActions
                        , links = maybeLinks }
-    _ -> InvalidSiren json
+    _ -> InvalidSiren ("Not a JSON object.", json)
 
 --        ValidSiren { class = Maybe.map parseClass maybeClass
 --                   , properties = Maybe.map parseProperties maybeProperties

@@ -8,5 +8,5 @@ update msg oldModel =
   case msg of
   NewLocation loc -> ({ oldModel | location = loc }, Cmd.none)
   GoToLink loc -> ({ oldModel | location = loc }, fetchCommand loc)
-  FetchSucceed doc -> ({ oldModel | debug = "success", body = doc }, Cmd.none)
+  FetchSucceed (message, doc) -> ({ oldModel | debug = message, body = doc }, Cmd.none)
   FetchFail e -> ({ oldModel | debug = "failure" }, Cmd.none)

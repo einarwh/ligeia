@@ -14,8 +14,9 @@ type alias SirenProperties = JsonVal
 
 type alias SirenField =
   { name: String,
-    type': String,
-    value: String }
+    type': Maybe String,
+    value: Maybe String,
+    title: Maybe String }
 
 type alias SirenFields = List SirenField
 

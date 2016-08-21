@@ -17,9 +17,10 @@ sirenDoc =
            , method = Just "POST"
            , href = "http://localhost:1337/hywit/void"
            , title = Nothing
-           , fields = Just [ { name = "foo"
-                             , type' = "text"
-                             , value = "nought" } ] } ]
+           , fields = Just [ { name = "field-name"
+                             , type' = Nothing
+                             , title = Nothing
+                             , value = Nothing } ] } ]
   , links =
     Just [ { rel = ["lol", "hello"], href = "http://wherever" }
          , { rel = ["ok", "wut"], href = "http://lolever" }

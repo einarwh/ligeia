@@ -8542,9 +8542,9 @@ var _user$project$Siren$SirenLink = F2(
 	function (a, b) {
 		return {rel: a, href: b};
 	});
-var _user$project$Siren$SirenField = F3(
-	function (a, b, c) {
-		return {name: a, type$: b, value: c};
+var _user$project$Siren$SirenField = F4(
+	function (a, b, c, d) {
+		return {name: a, type$: b, value: c, title: d};
 	});
 var _user$project$Siren$SirenAction = F6(
 	function (a, b, c, d, e, f) {
@@ -8641,8 +8641,8 @@ var _user$project$JsonDecoder$valDecoder = _elm_lang$core$Json_Decode$oneOf(
 					})),
 			_user$project$JsonDecoder$decodeList)
 		]));
-var _user$project$Parse$combineSirenResults = F2(
-	function (classResult, linksResult) {
+var _user$project$Parse$combineSirenResults = F3(
+	function (classResult, linksResult, actionsResult) {
 		var _p0 = classResult;
 		if (_p0.ctor === 'Err') {
 			return _elm_lang$core$Result$Err(_p0._0);
@@ -8651,19 +8651,24 @@ var _user$project$Parse$combineSirenResults = F2(
 			if (_p1.ctor === 'Err') {
 				return _elm_lang$core$Result$Err(_p1._0);
 			} else {
-				return _elm_lang$core$Result$Ok(
-					{ctor: '_Tuple2', _0: _p0._0, _1: _p1._0});
+				var _p2 = actionsResult;
+				if (_p2.ctor === 'Err') {
+					return _elm_lang$core$Result$Err(_p2._0);
+				} else {
+					return _elm_lang$core$Result$Ok(
+						{ctor: '_Tuple3', _0: _p0._0, _1: _p1._0, _2: _p2._0});
+				}
 			}
 		}
 	});
 var _user$project$Parse$liftError = function (maybeResult) {
-	var _p2 = maybeResult;
-	if (_p2.ctor === 'Just') {
-		if (_p2._0.ctor === 'Ok') {
+	var _p3 = maybeResult;
+	if (_p3.ctor === 'Just') {
+		if (_p3._0.ctor === 'Ok') {
 			return _elm_lang$core$Result$Ok(
-				_elm_lang$core$Maybe$Just(_p2._0._0));
+				_elm_lang$core$Maybe$Just(_p3._0._0));
 		} else {
-			return _elm_lang$core$Result$Err(_p2._0._0);
+			return _elm_lang$core$Result$Err(_p3._0._0);
 		}
 	} else {
 		return _elm_lang$core$Result$Ok(_elm_lang$core$Maybe$Nothing);
@@ -8677,16 +8682,6 @@ var _user$project$Parse$parseDictValue = F3(
 				parser,
 				A2(_elm_lang$core$Dict$get, key, dct)));
 	});
-var _user$project$Parse$parseFields = function (json) {
-	var _p3 = json;
-	if (_p3.ctor === 'JsonList') {
-		return _elm_lang$core$Result$Err(
-			{ctor: '_Tuple2', _0: 'Not implemented', _1: json});
-	} else {
-		return _elm_lang$core$Result$Err(
-			{ctor: '_Tuple2', _0: 'parseFields: Unexpected json instead of list of Siren fields', _1: json});
-	}
-};
 var _user$project$Parse$parseString = function (json) {
 	var _p4 = json;
 	if (_p4.ctor === 'JsonStr') {
@@ -8696,10 +8691,51 @@ var _user$project$Parse$parseString = function (json) {
 			{ctor: '_Tuple2', _0: 'parseString: Unexpected json instead of string.', _1: json});
 	}
 };
-var _user$project$Parse$parseHref = function (json) {
+var _user$project$Parse$parseField = function (json) {
 	var _p5 = json;
-	if (_p5.ctor === 'JsonStr') {
-		return _elm_lang$core$Result$Ok(_p5._0);
+	if (_p5.ctor === 'JsonDict') {
+		var _p11 = _p5._0;
+		var titleResult = A3(_user$project$Parse$parseDictValue, _p11, 'title', _user$project$Parse$parseString);
+		var valueResult = A3(_user$project$Parse$parseDictValue, _p11, 'value', _user$project$Parse$parseString);
+		var typeResult = A3(_user$project$Parse$parseDictValue, _p11, 'type', _user$project$Parse$parseString);
+		var nameResult = A3(_user$project$Parse$parseDictValue, _p11, 'name', _user$project$Parse$parseString);
+		var _p6 = {ctor: '_Tuple4', _0: nameResult, _1: typeResult, _2: valueResult, _3: titleResult};
+		if (_p6._0.ctor === 'Ok') {
+			if (_p6._1.ctor === 'Ok') {
+				if (_p6._2.ctor === 'Ok') {
+					if (_p6._3.ctor === 'Ok') {
+						var _p10 = _p6._2._0;
+						var _p9 = _p6._1._0;
+						var _p8 = _p6._3._0;
+						var _p7 = {ctor: '_Tuple4', _0: _p6._0._0, _1: _p9, _2: _p10, _3: _p8};
+						if ((_p7.ctor === '_Tuple4') && (_p7._0.ctor === 'Just')) {
+							return _elm_lang$core$Result$Ok(
+								{name: _p7._0._0, type$: _p9, value: _p10, title: _p8});
+						} else {
+							return _elm_lang$core$Result$Err(
+								{ctor: '_Tuple2', _0: 'Missing mandatory part of field.', _1: json});
+						}
+					} else {
+						return _elm_lang$core$Result$Err(_p6._3._0);
+					}
+				} else {
+					return _elm_lang$core$Result$Err(_p6._2._0);
+				}
+			} else {
+				return _elm_lang$core$Result$Err(_p6._1._0);
+			}
+		} else {
+			return _elm_lang$core$Result$Err(_p6._0._0);
+		}
+	} else {
+		return _elm_lang$core$Result$Err(
+			{ctor: '_Tuple2', _0: 'parseField: Unexpected json instead of field.', _1: json});
+	}
+};
+var _user$project$Parse$parseHref = function (json) {
+	var _p12 = json;
+	if (_p12.ctor === 'JsonStr') {
+		return _elm_lang$core$Result$Ok(_p12._0);
 	} else {
 		return _elm_lang$core$Result$Err(
 			{ctor: '_Tuple2', _0: 'parseHref: Unexpected json instead of href.', _1: json});
@@ -8707,18 +8743,18 @@ var _user$project$Parse$parseHref = function (json) {
 };
 var _user$project$Parse$combineResults = F2(
 	function (res, acc) {
-		var _p6 = acc;
-		if (_p6.ctor === 'Ok') {
-			var _p7 = res;
-			if (_p7.ctor === 'Ok') {
+		var _p13 = acc;
+		if (_p13.ctor === 'Ok') {
+			var _p14 = res;
+			if (_p14.ctor === 'Ok') {
 				return _elm_lang$core$Result$Ok(
 					A2(
 						_elm_lang$core$List$append,
-						_p6._0,
+						_p13._0,
 						_elm_lang$core$Native_List.fromArray(
-							[_p7._0])));
+							[_p14._0])));
 			} else {
-				return _elm_lang$core$Result$Err(_p7._0);
+				return _elm_lang$core$Result$Err(_p14._0);
 			}
 		} else {
 			return acc;
@@ -8733,20 +8769,40 @@ var _user$project$Parse$toListOfActions = function (resultList) {
 				[])),
 		resultList);
 };
+var _user$project$Parse$toListOfFields = function (resultList) {
+	return A3(
+		_elm_lang$core$List$foldl,
+		_user$project$Parse$combineResults,
+		_elm_lang$core$Result$Ok(
+			_elm_lang$core$Native_List.fromArray(
+				[])),
+		resultList);
+};
+var _user$project$Parse$parseFields = function (json) {
+	var _p15 = json;
+	if (_p15.ctor === 'JsonList') {
+		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseField, _p15._0);
+		var fields = _user$project$Parse$toListOfFields(resultList);
+		return fields;
+	} else {
+		return _elm_lang$core$Result$Err(
+			{ctor: '_Tuple2', _0: 'parseFields: Unexpected json instead of list of Siren fields', _1: json});
+	}
+};
 var _user$project$Parse$combineLinkRelationResult = F2(
 	function (res, acc) {
-		var _p8 = acc;
-		if (_p8.ctor === 'Ok') {
-			var _p9 = res;
-			if (_p9.ctor === 'Ok') {
+		var _p16 = acc;
+		if (_p16.ctor === 'Ok') {
+			var _p17 = res;
+			if (_p17.ctor === 'Ok') {
 				return _elm_lang$core$Result$Ok(
 					A2(
 						_elm_lang$core$List$append,
-						_p8._0,
+						_p16._0,
 						_elm_lang$core$Native_List.fromArray(
-							[_p9._0])));
+							[_p17._0])));
 			} else {
-				return _elm_lang$core$Result$Err(_p9._0);
+				return _elm_lang$core$Result$Err(_p17._0);
 			}
 		} else {
 			return acc;
@@ -8762,18 +8818,18 @@ var _user$project$Parse$toListOfLinkRelations = function (resultList) {
 		resultList);
 };
 var _user$project$Parse$parseLinkRelation = function (json) {
-	var _p10 = json;
-	if (_p10.ctor === 'JsonStr') {
-		return _elm_lang$core$Result$Ok(_p10._0);
+	var _p18 = json;
+	if (_p18.ctor === 'JsonStr') {
+		return _elm_lang$core$Result$Ok(_p18._0);
 	} else {
 		return _elm_lang$core$Result$Err(
 			{ctor: '_Tuple2', _0: 'parseLinkRelation: Unexpected json instead of string.', _1: json});
 	}
 };
 var _user$project$Parse$parseLinkRelations = function (json) {
-	var _p11 = json;
-	if (_p11.ctor === 'JsonList') {
-		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseLinkRelation, _p11._0);
+	var _p19 = json;
+	if (_p19.ctor === 'JsonList') {
+		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseLinkRelation, _p19._0);
 		var relations = _user$project$Parse$toListOfLinkRelations(resultList);
 		return relations;
 	} else {
@@ -8782,30 +8838,30 @@ var _user$project$Parse$parseLinkRelations = function (json) {
 	}
 };
 var _user$project$Parse$parseLink = function (json) {
-	var _p12 = json;
-	if (_p12.ctor === 'JsonDict') {
-		var _p16 = _p12._0;
-		var _p13 = {
+	var _p20 = json;
+	if (_p20.ctor === 'JsonDict') {
+		var _p24 = _p20._0;
+		var _p21 = {
 			ctor: '_Tuple2',
-			_0: A2(_elm_lang$core$Dict$get, 'rel', _p16),
-			_1: A2(_elm_lang$core$Dict$get, 'href', _p16)
+			_0: A2(_elm_lang$core$Dict$get, 'rel', _p24),
+			_1: A2(_elm_lang$core$Dict$get, 'href', _p24)
 		};
-		var maybeRels = _p13._0;
-		var maybeHref = _p13._1;
-		var _p14 = {ctor: '_Tuple2', _0: maybeRels, _1: maybeHref};
-		if (((_p14.ctor === '_Tuple2') && (_p14._0.ctor === 'Just')) && (_p14._1.ctor === 'Just')) {
-			var linkHrefResult = _user$project$Parse$parseHref(_p14._1._0);
-			var linkRelsResult = _user$project$Parse$parseLinkRelations(_p14._0._0);
-			var _p15 = {ctor: '_Tuple2', _0: linkRelsResult, _1: linkHrefResult};
-			if (_p15._0.ctor === 'Ok') {
-				if (_p15._1.ctor === 'Ok') {
+		var maybeRels = _p21._0;
+		var maybeHref = _p21._1;
+		var _p22 = {ctor: '_Tuple2', _0: maybeRels, _1: maybeHref};
+		if (((_p22.ctor === '_Tuple2') && (_p22._0.ctor === 'Just')) && (_p22._1.ctor === 'Just')) {
+			var linkHrefResult = _user$project$Parse$parseHref(_p22._1._0);
+			var linkRelsResult = _user$project$Parse$parseLinkRelations(_p22._0._0);
+			var _p23 = {ctor: '_Tuple2', _0: linkRelsResult, _1: linkHrefResult};
+			if (_p23._0.ctor === 'Ok') {
+				if (_p23._1.ctor === 'Ok') {
 					return _elm_lang$core$Result$Ok(
-						{rel: _p15._0._0, href: _p15._1._0});
+						{rel: _p23._0._0, href: _p23._1._0});
 				} else {
-					return _elm_lang$core$Result$Err(_p15._1._0);
+					return _elm_lang$core$Result$Err(_p23._1._0);
 				}
 			} else {
-				return _elm_lang$core$Result$Err(_p15._0._0);
+				return _elm_lang$core$Result$Err(_p23._0._0);
 			}
 		} else {
 			return _elm_lang$core$Result$Err(
@@ -8818,18 +8874,18 @@ var _user$project$Parse$parseLink = function (json) {
 };
 var _user$project$Parse$combineLinkResult = F2(
 	function (res, acc) {
-		var _p17 = acc;
-		if (_p17.ctor === 'Ok') {
-			var _p18 = res;
-			if (_p18.ctor === 'Ok') {
+		var _p25 = acc;
+		if (_p25.ctor === 'Ok') {
+			var _p26 = res;
+			if (_p26.ctor === 'Ok') {
 				return _elm_lang$core$Result$Ok(
 					A2(
 						_elm_lang$core$List$append,
-						_p17._0,
+						_p25._0,
 						_elm_lang$core$Native_List.fromArray(
-							[_p18._0])));
+							[_p26._0])));
 			} else {
-				return _elm_lang$core$Result$Err(_p18._0);
+				return _elm_lang$core$Result$Err(_p26._0);
 			}
 		} else {
 			return acc;
@@ -8845,9 +8901,9 @@ var _user$project$Parse$toListOfLinks = function (resultList) {
 		resultList);
 };
 var _user$project$Parse$parseLinks = function (json) {
-	var _p19 = json;
-	if (_p19.ctor === 'JsonList') {
-		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseLink, _p19._0);
+	var _p27 = json;
+	if (_p27.ctor === 'JsonList') {
+		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseLink, _p27._0);
 		var links = _user$project$Parse$toListOfLinks(resultList);
 		return links;
 	} else {
@@ -8857,18 +8913,18 @@ var _user$project$Parse$parseLinks = function (json) {
 };
 var _user$project$Parse$combineClassResult = F2(
 	function (res, acc) {
-		var _p20 = acc;
-		if (_p20.ctor === 'Ok') {
-			var _p21 = res;
-			if (_p21.ctor === 'Ok') {
+		var _p28 = acc;
+		if (_p28.ctor === 'Ok') {
+			var _p29 = res;
+			if (_p29.ctor === 'Ok') {
 				return _elm_lang$core$Result$Ok(
 					A2(
 						_elm_lang$core$List$append,
-						_p20._0,
+						_p28._0,
 						_elm_lang$core$Native_List.fromArray(
-							[_p21._0])));
+							[_p29._0])));
 			} else {
-				return _elm_lang$core$Result$Err(_p21._0);
+				return _elm_lang$core$Result$Err(_p29._0);
 			}
 		} else {
 			return acc;
@@ -8884,18 +8940,18 @@ var _user$project$Parse$toListOfClasses = function (resultList) {
 		resultList);
 };
 var _user$project$Parse$parseClassElement = function (json) {
-	var _p22 = json;
-	if (_p22.ctor === 'JsonStr') {
-		return _elm_lang$core$Result$Ok(_p22._0);
+	var _p30 = json;
+	if (_p30.ctor === 'JsonStr') {
+		return _elm_lang$core$Result$Ok(_p30._0);
 	} else {
 		return _elm_lang$core$Result$Err(
 			{ctor: '_Tuple2', _0: 'parseClassElement: Unexpected json instead of string.', _1: json});
 	}
 };
 var _user$project$Parse$parseClasses = function (json) {
-	var _p23 = json;
-	if (_p23.ctor === 'JsonList') {
-		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseClassElement, _p23._0);
+	var _p31 = json;
+	if (_p31.ctor === 'JsonList') {
+		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseClassElement, _p31._0);
 		var classes = _user$project$Parse$toListOfClasses(resultList);
 		return classes;
 	} else {
@@ -8904,51 +8960,51 @@ var _user$project$Parse$parseClasses = function (json) {
 	}
 };
 var _user$project$Parse$parseAction = function (json) {
-	var _p24 = json;
-	if (_p24.ctor === 'JsonDict') {
-		var _p31 = _p24._0;
-		var fieldsResult = A3(_user$project$Parse$parseDictValue, _p31, 'fields', _user$project$Parse$parseFields);
-		var titleResult = A3(_user$project$Parse$parseDictValue, _p31, 'title', _user$project$Parse$parseString);
-		var hrefResult = A3(_user$project$Parse$parseDictValue, _p31, 'href', _user$project$Parse$parseHref);
-		var methodResult = A3(_user$project$Parse$parseDictValue, _p31, 'method', _user$project$Parse$parseString);
-		var classResult = A3(_user$project$Parse$parseDictValue, _p31, 'class', _user$project$Parse$parseClasses);
-		var nameResult = A3(_user$project$Parse$parseDictValue, _p31, 'name', _user$project$Parse$parseString);
-		var _p25 = {ctor: '_Tuple6', _0: nameResult, _1: classResult, _2: methodResult, _3: hrefResult, _4: titleResult, _5: fieldsResult};
-		if (_p25._0.ctor === 'Ok') {
-			if (_p25._1.ctor === 'Ok') {
-				if (_p25._2.ctor === 'Ok') {
-					if (_p25._3.ctor === 'Ok') {
-						if (_p25._4.ctor === 'Ok') {
-							if (_p25._5.ctor === 'Ok') {
-								var _p30 = _p25._4._0;
-								var _p29 = _p25._2._0;
-								var _p28 = _p25._5._0;
-								var _p27 = _p25._1._0;
-								var _p26 = {ctor: '_Tuple6', _0: _p25._0._0, _1: _p27, _2: _p29, _3: _p25._3._0, _4: _p30, _5: _p28};
-								if (((_p26.ctor === '_Tuple6') && (_p26._0.ctor === 'Just')) && (_p26._3.ctor === 'Just')) {
+	var _p32 = json;
+	if (_p32.ctor === 'JsonDict') {
+		var _p39 = _p32._0;
+		var fieldsResult = A3(_user$project$Parse$parseDictValue, _p39, 'fields', _user$project$Parse$parseFields);
+		var titleResult = A3(_user$project$Parse$parseDictValue, _p39, 'title', _user$project$Parse$parseString);
+		var hrefResult = A3(_user$project$Parse$parseDictValue, _p39, 'href', _user$project$Parse$parseHref);
+		var methodResult = A3(_user$project$Parse$parseDictValue, _p39, 'method', _user$project$Parse$parseString);
+		var classResult = A3(_user$project$Parse$parseDictValue, _p39, 'class', _user$project$Parse$parseClasses);
+		var nameResult = A3(_user$project$Parse$parseDictValue, _p39, 'name', _user$project$Parse$parseString);
+		var _p33 = {ctor: '_Tuple6', _0: nameResult, _1: classResult, _2: methodResult, _3: hrefResult, _4: titleResult, _5: fieldsResult};
+		if (_p33._0.ctor === 'Ok') {
+			if (_p33._1.ctor === 'Ok') {
+				if (_p33._2.ctor === 'Ok') {
+					if (_p33._3.ctor === 'Ok') {
+						if (_p33._4.ctor === 'Ok') {
+							if (_p33._5.ctor === 'Ok') {
+								var _p38 = _p33._4._0;
+								var _p37 = _p33._2._0;
+								var _p36 = _p33._5._0;
+								var _p35 = _p33._1._0;
+								var _p34 = {ctor: '_Tuple6', _0: _p33._0._0, _1: _p35, _2: _p37, _3: _p33._3._0, _4: _p38, _5: _p36};
+								if (((_p34.ctor === '_Tuple6') && (_p34._0.ctor === 'Just')) && (_p34._3.ctor === 'Just')) {
 									return _elm_lang$core$Result$Ok(
-										{name: _p26._0._0, $class: _p27, method: _p29, href: _p26._3._0, title: _p30, fields: _p28});
+										{name: _p34._0._0, $class: _p35, method: _p37, href: _p34._3._0, title: _p38, fields: _p36});
 								} else {
 									return _elm_lang$core$Result$Err(
 										{ctor: '_Tuple2', _0: 'Missing mandatory part of action.', _1: json});
 								}
 							} else {
-								return _elm_lang$core$Result$Err(_p25._5._0);
+								return _elm_lang$core$Result$Err(_p33._5._0);
 							}
 						} else {
-							return _elm_lang$core$Result$Err(_p25._4._0);
+							return _elm_lang$core$Result$Err(_p33._4._0);
 						}
 					} else {
-						return _elm_lang$core$Result$Err(_p25._3._0);
+						return _elm_lang$core$Result$Err(_p33._3._0);
 					}
 				} else {
-					return _elm_lang$core$Result$Err(_p25._2._0);
+					return _elm_lang$core$Result$Err(_p33._2._0);
 				}
 			} else {
-				return _elm_lang$core$Result$Err(_p25._1._0);
+				return _elm_lang$core$Result$Err(_p33._1._0);
 			}
 		} else {
-			return _elm_lang$core$Result$Err(_p25._0._0);
+			return _elm_lang$core$Result$Err(_p33._0._0);
 		}
 	} else {
 		return _elm_lang$core$Result$Err(
@@ -8956,9 +9012,9 @@ var _user$project$Parse$parseAction = function (json) {
 	}
 };
 var _user$project$Parse$parseActions = function (json) {
-	var _p32 = json;
-	if (_p32.ctor === 'JsonList') {
-		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseAction, _p32._0);
+	var _p40 = json;
+	if (_p40.ctor === 'JsonList') {
+		var resultList = A2(_elm_lang$core$List$map, _user$project$Parse$parseAction, _p40._0);
 		var links = _user$project$Parse$toListOfActions(resultList);
 		return links;
 	} else {
@@ -8973,29 +9029,30 @@ var _user$project$Parse$InvalidSiren = function (a) {
 	return {ctor: 'InvalidSiren', _0: a};
 };
 var _user$project$Parse$toSiren = function (json) {
-	var _p33 = json;
-	if (_p33.ctor === 'JsonDict') {
-		var _p35 = _p33._0;
-		var maybeLinksJson = A2(_elm_lang$core$Dict$get, 'links', _p35);
+	var _p41 = json;
+	if (_p41.ctor === 'JsonDict') {
+		var _p43 = _p41._0;
+		var maybeLinksJson = A2(_elm_lang$core$Dict$get, 'links', _p43);
 		var maybeLinksResult = A2(_elm_lang$core$Maybe$map, _user$project$Parse$parseLinks, maybeLinksJson);
 		var linksResult = _user$project$Parse$liftError(maybeLinksResult);
-		var maybeActionsJson = A2(_elm_lang$core$Dict$get, 'actions', _p35);
+		var maybeActionsJson = A2(_elm_lang$core$Dict$get, 'actions', _p43);
 		var maybeActionsResult = A2(_elm_lang$core$Maybe$map, _user$project$Parse$parseActions, maybeActionsJson);
 		var actionsResult = _user$project$Parse$liftError(maybeActionsResult);
-		var maybePropertiesJson = A2(_elm_lang$core$Dict$get, 'properties', _p35);
-		var maybeClassJson = A2(_elm_lang$core$Dict$get, 'class', _p35);
+		var maybePropertiesJson = A2(_elm_lang$core$Dict$get, 'properties', _p43);
+		var maybeClassJson = A2(_elm_lang$core$Dict$get, 'class', _p43);
 		var maybeClassResult = A2(_elm_lang$core$Maybe$map, _user$project$Parse$parseClasses, maybeClassJson);
 		var classResult = _user$project$Parse$liftError(maybeClassResult);
-		var combinedResults = A2(_user$project$Parse$combineSirenResults, classResult, linksResult);
-		var _p34 = combinedResults;
-		if (_p34.ctor === 'Err') {
-			return _user$project$Parse$InvalidSiren(json);
+		var combinedResults = A3(_user$project$Parse$combineSirenResults, classResult, linksResult, actionsResult);
+		var _p42 = combinedResults;
+		if (_p42.ctor === 'Err') {
+			return _user$project$Parse$InvalidSiren(_p42._0);
 		} else {
 			return _user$project$Parse$ValidSiren(
-				{$class: _p34._0._0, properties: maybePropertiesJson, actions: _elm_lang$core$Maybe$Nothing, links: _p34._0._1});
+				{$class: _p42._0._0, properties: maybePropertiesJson, actions: _p42._0._2, links: _p42._0._1});
 		}
 	} else {
-		return _user$project$Parse$InvalidSiren(json);
+		return _user$project$Parse$InvalidSiren(
+			{ctor: '_Tuple2', _0: 'Not a JSON object.', _1: json});
 	}
 };
 var _user$project$Fetch$handleRes = F2(
@@ -9007,19 +9064,33 @@ var _user$project$Fetch$handleRes = F2(
 				var x = A2(_elm_lang$core$Json_Decode$decodeString, _user$project$JsonDecoder$valDecoder, _p4);
 				var _p1 = x;
 				if (_p1.ctor === 'Ok') {
-					var _p3 = _p1._0;
-					var doc = function () {
-						var _p2 = _user$project$Parse$toSiren(_p3);
-						if (_p2.ctor === 'ValidSiren') {
-							return _user$project$Model$SirenDoc(_p2._0);
+					var _p2 = function () {
+						var _p3 = _user$project$Parse$toSiren(_p1._0);
+						if (_p3.ctor === 'ValidSiren') {
+							return {
+								ctor: '_Tuple2',
+								_0: 'siren ok',
+								_1: _user$project$Model$SirenDoc(_p3._0)
+							};
 						} else {
-							return _user$project$Model$JsonDoc(_p3);
+							return {
+								ctor: '_Tuple2',
+								_0: _p3._0._0,
+								_1: _user$project$Model$JsonDoc(_p3._0._1)
+							};
 						}
 					}();
-					return handle(doc);
+					var txt = _p2._0;
+					var doc = _p2._1;
+					return handle(
+						{ctor: '_Tuple2', _0: txt, _1: doc});
 				} else {
 					return handle(
-						_user$project$Model$TextDoc(_p4));
+						{
+							ctor: '_Tuple2',
+							_0: 'just text',
+							_1: _user$project$Model$TextDoc(_p4)
+						});
 				}
 			} else {
 				return _elm_lang$core$Task$fail(
@@ -9093,7 +9164,7 @@ var _user$project$Init$sirenDoc = {
 				fields: _elm_lang$core$Maybe$Just(
 					_elm_lang$core$Native_List.fromArray(
 						[
-							{name: 'foo', type$: 'text', value: 'nought'}
+							{name: 'field-name', type$: _elm_lang$core$Maybe$Nothing, title: _elm_lang$core$Maybe$Nothing, value: _elm_lang$core$Maybe$Nothing}
 						]))
 			}
 			])),
@@ -9154,7 +9225,7 @@ var _user$project$Update$update = F2(
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						oldModel,
-						{debug: 'success', body: _p0._0}),
+						{debug: _p0._0._0, body: _p0._0._1}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
 			default:
@@ -9196,6 +9267,24 @@ var _user$project$Render$renderClasses = function (maybeClasses) {
 	}
 };
 var _user$project$Render$renderField = function (field) {
+	var maybeValue = field.value;
+	var title = function () {
+		var _p1 = field.title;
+		if (_p1.ctor === 'Just') {
+			return _p1._0;
+		} else {
+			return '';
+		}
+	}();
+	var type$ = function () {
+		var _p2 = field.type$;
+		if (_p2.ctor === 'Just') {
+			return _p2._0;
+		} else {
+			return 'text';
+		}
+	}();
+	var name = field.name;
 	return A2(
 		_elm_lang$html$Html$div,
 		_elm_lang$core$Native_List.fromArray(
@@ -9214,25 +9303,15 @@ var _user$project$Render$renderField = function (field) {
 					]),
 				_elm_lang$core$Native_List.fromArray(
 					[
-						_elm_lang$html$Html$text(field.name)
-					])),
-				A2(
-				_elm_lang$html$Html$input,
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html_Attributes$value(field.value)
-					]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(field.name)
+						_elm_lang$html$Html$text(name)
 					]))
 			]));
 };
 var _user$project$Render$renderAction = function (action) {
 	var renderedFields = function () {
-		var _p1 = action.fields;
-		if (_p1.ctor === 'Just') {
-			return A2(_elm_lang$core$List$map, _user$project$Render$renderField, _p1._0);
+		var _p3 = action.fields;
+		if (_p3.ctor === 'Just') {
+			return A2(_elm_lang$core$List$map, _user$project$Render$renderField, _p3._0);
 		} else {
 			return _elm_lang$core$Native_List.fromArray(
 				[]);
@@ -9261,9 +9340,9 @@ var _user$project$Render$renderAction = function (action) {
 			]));
 };
 var _user$project$Render$renderActions = function (maybeActions) {
-	var _p2 = maybeActions;
-	if (_p2.ctor === 'Just') {
-		var rendered = A2(_elm_lang$core$List$map, _user$project$Render$renderAction, _p2._0);
+	var _p4 = maybeActions;
+	if (_p4.ctor === 'Just') {
+		var rendered = A2(_elm_lang$core$List$map, _user$project$Render$renderAction, _p4._0);
 		return A2(
 			_elm_lang$html$Html$div,
 			_elm_lang$core$Native_List.fromArray(
@@ -9275,17 +9354,19 @@ var _user$project$Render$renderActions = function (maybeActions) {
 			_elm_lang$core$Native_List.fromArray(
 				[]),
 			_elm_lang$core$Native_List.fromArray(
-				[]));
+				[
+					_elm_lang$html$Html$text('No actions')
+				]));
 	}
 };
 var _user$project$Render$renderJson = function (json) {
-	var _p3 = json;
-	switch (_p3.ctor) {
+	var _p5 = json;
+	switch (_p5.ctor) {
 		case 'JsonStr':
-			return _elm_lang$html$Html$text(_p3._0);
+			return _elm_lang$html$Html$text(_p5._0);
 		case 'JsonBool':
 			return _elm_lang$html$Html$text(
-				_p3._0 ? 'true' : 'false');
+				_p5._0 ? 'true' : 'false');
 		case 'JsonInt':
 			return _elm_lang$html$Html$text('int');
 		case 'JsonFloat':
@@ -9297,17 +9378,17 @@ var _user$project$Render$renderJson = function (json) {
 				_elm_lang$html$Html$div,
 				_elm_lang$core$Native_List.fromArray(
 					[]),
-				A2(_elm_lang$core$List$map, _user$project$Render$renderJson, _p3._0));
+				A2(_elm_lang$core$List$map, _user$project$Render$renderJson, _p5._0));
 		default:
-			var dctLst = _elm_lang$core$Dict$toList(_p3._0);
+			var dctLst = _elm_lang$core$Dict$toList(_p5._0);
 			return A2(
 				_elm_lang$html$Html$div,
 				_elm_lang$core$Native_List.fromArray(
 					[]),
 				A2(
 					_elm_lang$core$List$map,
-					function (_p4) {
-						var _p5 = _p4;
+					function (_p6) {
+						var _p7 = _p6;
 						return A2(
 							_elm_lang$html$Html$div,
 							_elm_lang$core$Native_List.fromArray(
@@ -9326,17 +9407,17 @@ var _user$project$Render$renderJson = function (json) {
 										]),
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$html$Html$text(_p5._0)
+											_elm_lang$html$Html$text(_p7._0)
 										])),
-									_user$project$Render$renderJson(_p5._1)
+									_user$project$Render$renderJson(_p7._1)
 								]));
 					},
 					dctLst));
 	}
 };
 var _user$project$Render$renderProperties = function (maybeProps) {
-	var _p6 = maybeProps;
-	if (_p6.ctor === 'Just') {
+	var _p8 = maybeProps;
+	if (_p8.ctor === 'Just') {
 		return A2(
 			_elm_lang$html$Html$div,
 			_elm_lang$core$Native_List.fromArray(
@@ -9351,7 +9432,7 @@ var _user$project$Render$renderProperties = function (maybeProps) {
 						[
 							_elm_lang$html$Html$text('properties')
 						])),
-					_user$project$Render$renderJson(_p6._0)
+					_user$project$Render$renderJson(_p8._0)
 				]));
 	} else {
 		return A2(
@@ -9438,15 +9519,15 @@ var _user$project$Render$renderLink = function (link) {
 	return A2(_elm_lang$core$List$member, 'image', link.rel) ? _user$project$Render$renderImageLink(link) : _user$project$Render$renderAnchorLink(link);
 };
 var _user$project$Render$renderSirenDocument = function (doc) {
-	var _p7 = function () {
-		var _p8 = doc.links;
-		if (_p8.ctor === 'Just') {
+	var _p9 = function () {
+		var _p10 = doc.links;
+		if (_p10.ctor === 'Just') {
 			return A2(
 				_elm_lang$core$List$partition,
 				function (lnk) {
 					return A2(_elm_lang$core$List$member, 'image', lnk.rel) || A2(_elm_lang$core$List$member, 'view', lnk.rel);
 				},
-				_p8._0);
+				_p10._0);
 		} else {
 			return {
 				ctor: '_Tuple2',
@@ -9457,8 +9538,8 @@ var _user$project$Render$renderSirenDocument = function (doc) {
 			};
 		}
 	}();
-	var imageLinks = _p7._0;
-	var anchorLinks = _p7._1;
+	var imageLinks = _p9._0;
+	var anchorLinks = _p9._1;
 	return A2(
 		_elm_lang$html$Html$div,
 		_elm_lang$core$Native_List.fromArray(
@@ -9494,10 +9575,10 @@ var _user$project$Render$renderSirenDocument = function (doc) {
 			]));
 };
 var _user$project$Render$renderDocument = function (doc) {
-	var _p9 = doc;
-	switch (_p9.ctor) {
+	var _p11 = doc;
+	switch (_p11.ctor) {
 		case 'SirenDoc':
-			return _user$project$Render$renderSirenDocument(_p9._0);
+			return _user$project$Render$renderSirenDocument(_p11._0);
 		case 'JsonDoc':
 			return A2(
 				_elm_lang$html$Html$div,
@@ -9506,7 +9587,7 @@ var _user$project$Render$renderDocument = function (doc) {
 				_elm_lang$core$Native_List.fromArray(
 					[
 						_elm_lang$html$Html$text('json document'),
-						_user$project$Render$renderJson(_p9._0)
+						_user$project$Render$renderJson(_p11._0)
 					]));
 		default:
 			return A2(
@@ -9515,7 +9596,7 @@ var _user$project$Render$renderDocument = function (doc) {
 					[]),
 				_elm_lang$core$Native_List.fromArray(
 					[
-						_elm_lang$html$Html$text(_p9._0)
+						_elm_lang$html$Html$text(_p11._0)
 					]));
 	}
 };
